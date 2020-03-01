@@ -16,7 +16,9 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(klein)
 
-# Now, you can use target_link_libraries(your_lib PUBLIC klein)
+# Now, you can use target_link_libraries(your_lib PUBLIC klein::klein)
+# If you can target SSE4.1 (~97% market penetration), you can link against
+# the target klein::klein_sse42 instead.
 ```
 
 The primary "catch-all" header provided can be included using `#include <klein/klein.hpp>`.
@@ -77,7 +79,7 @@ point p2 = m(p1);
 // for upload to a shader or for interoperability with code expecting
 // matrices as part of its interface. The matrix returned in this way
 // is a column-major matrix
-mat4x4 m_matrix = m.as_matrix();
+mat4x4 m_matrix = m.as_mat4x4();
 ```
 
 The spherical interpolation (aka slerp) employed to produce smooth incremental

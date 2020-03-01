@@ -66,14 +66,10 @@ struct rotor final : public entity<0b10>
         float half = 0.5f * ang_rad;
         // Rely on compiler to coalesce these two assignments into a single
         // sincos call at instruction selection time
-        float buf[4];
-        buf[0]        = std::cos(half);
         float sin_ang = std::sin(half);
         float scale   = sin_ang * inv_norm;
-        buf[1]        = z * scale;
-        buf[2]        = y * scale;
-        buf[3]        = x * scale;
-        parts[0].reg  = _mm_loadu_ps(buf);
+        p1()          = _mm_set_ps(z, y, x, std::cos(half));
+        p1()          = _mm_mul_ps(p1(), _mm_set_ps(scale, scale, scale, 1.f));
     }
 
     rotor(entity<0b10> const& other)
@@ -83,7 +79,7 @@ struct rotor final : public entity<0b10>
     /// Fast load operation for packed data that is already normalized. The
     /// argument `data` should point to a set of 4 float values with layout `(a,
     /// b, c, d)` corresponding to the multivector
-    /// $a + b\mathbf{e}_{12} + c\mathbf{e}_{31} + d\mathbf{e}_{23}$.
+    /// $a + b\mathbf{e}_{23} + c\mathbf{e}_{31} + d\mathbf{e}_{12}$.
     ///
     /// !!! danger
     ///
@@ -95,18 +91,58 @@ struct rotor final : public entity<0b10>
     }
 
     /// Normalize a rotor such that $\mathbf{r}\widetilde{\mathbf{r}} = 1$.
+    ///
+    /// !!! tip
+    ///
+    ///     Normalization here is done using the `rsqrtps`
+    ///     instruction with a maximum relative error of $1.5\times 2^{-12}$.
     void normalize() noexcept
     {
         // A rotor is normalized if r * ~r is unity.
-        __m128 inv_norm = _mm_rcp_ps(_mm_sqrt_ps(_mm_dp_ps(p1(), p1(), 0xff)));
+        __m128 inv_norm = _mm_rsqrt_ps(detail::dp_bc(p1(), p1()));
         p1()            = _mm_mul_ps(p1(), inv_norm);
     }
 
+    /// Converts the rotor to a 3x4 column-major matrix. The results of this
+    /// conversion are only defined if the rotor is normalized, and this
+    /// conversion is preferable if so.
+    mat3x4 as_mat3x4() const noexcept
+    {
+        mat3x4 out;
+        mat4x4_12<false, true>(parts[0].reg, nullptr, out.cols);
+        return out;
+    }
+
     /// Converts the rotor to a 4x4 column-major matrix.
-    mat4x4 as_matrix() const noexcept
+    mat4x4 as_mat4x4() const noexcept
     {
         mat4x4 out;
         mat4x4_12<false>(parts[0].reg, nullptr, out.cols);
+        return out;
+    }
+
+    /// Returns the principal branch of this rotor's logarithm. Invoking
+    /// `exp` on the returned result maps back to this rotor.
+    ///
+    /// Given a rotor $\cos\alpha + \sin\alpha\left[a\ee_{23} + b\ee_{31} +\
+    /// c\ee_{23}\right]$, the log is computed as simply
+    /// $\alpha\left[a\ee_{23} + b\ee_{31} + c\ee_{23}\right]$.
+    /// This map is only well-defined if the
+    /// rotor is normalized such that $a^2 + b^2 + c^2 = 1$.
+    [[nodiscard]] branch log() const noexcept
+    {
+        float ang     = std::acos(parts[0].data[0]);
+        float sin_ang = std::sin(ang);
+
+        branch out;
+        out.p1() = _mm_mul_ps(p1(), _mm_rcp_ps(_mm_set1_ps(sin_ang)));
+        out.p1() = _mm_mul_ps(out.p1(), _mm_set1_ps(ang));
+#ifdef KLEIN_SSE_4_1
+        out.p1() = _mm_blend_ps(out.p1(), _mm_setzero_ps(), 1);
+#else
+        out.p1() = _mm_and_ps(
+            out.p1(), _mm_castsi128_ps(_mm_set_epi32(-1, -1, -1, 0)));
+#endif
         return out;
     }
 
@@ -115,7 +151,7 @@ struct rotor final : public entity<0b10>
     plane KLN_VEC_CALL operator()(plane const& p) const noexcept
     {
         plane out;
-        sw012<false, false>(&p.p0(), parts[0].reg, nullptr, &out.p0());
+        detail::sw012<false, false>(&p.p0(), parts[0].reg, nullptr, &out.p0());
         return out;
     }
 
@@ -131,7 +167,8 @@ struct rotor final : public entity<0b10>
     void KLN_VEC_CALL operator()(plane* in, plane* out, size_t count) const
         noexcept
     {
-        sw012<true, false>(&in->p0(), parts[0].reg, nullptr, &out->p0(), count);
+        detail::sw012<true, false>(
+            &in->p0(), parts[0].reg, nullptr, &out->p0(), count);
     }
 
     /// Conjugates a line $\ell$ with this rotor and returns the result
@@ -139,7 +176,7 @@ struct rotor final : public entity<0b10>
     line KLN_VEC_CALL operator()(line const& l) const noexcept
     {
         line out;
-        swMM<false, false>(&l.p1(), p1(), nullptr, &out.p1());
+        detail::swMM<false, false>(&l.p1(), p1(), nullptr, &out.p1());
         return out;
     }
 
@@ -154,7 +191,8 @@ struct rotor final : public entity<0b10>
     ///     each line individually.
     void KLN_VEC_CALL operator()(line* in, line* out, size_t count) const noexcept
     {
-        swMM<true, false>(&in->p1(), parts[0].reg, nullptr, &out->p1(), count);
+        detail::swMM<true, false>(
+            &in->p1(), parts[0].reg, nullptr, &out->p1(), count);
     }
 
     /// Conjugates a point $p$ with this rotor and returns the result
@@ -162,7 +200,7 @@ struct rotor final : public entity<0b10>
     point KLN_VEC_CALL operator()(point const& p) const noexcept
     {
         point out;
-        sw312<false, false>(&p.p3(), parts[0].reg, nullptr, &out.p3());
+        detail::sw312<false, false>(&p.p3(), parts[0].reg, nullptr, &out.p3());
         return out;
     }
 
@@ -178,7 +216,8 @@ struct rotor final : public entity<0b10>
     void KLN_VEC_CALL operator()(point* in, point* out, size_t count) const
         noexcept
     {
-        sw312<true, false>(&in->p3(), parts[0].reg, nullptr, &out->p3(), count);
+        detail::sw312<true, false>(
+            &in->p3(), parts[0].reg, nullptr, &out->p3(), count);
     }
 
     /// Conjugates a direction $d$ with this rotor and returns the result
@@ -186,7 +225,7 @@ struct rotor final : public entity<0b10>
     direction KLN_VEC_CALL operator()(direction const& d) const noexcept
     {
         direction out;
-        sw312<false, false>(&d.p3(), parts[0].reg, nullptr, &out.p3());
+        detail::sw312<false, false>(&d.p3(), parts[0].reg, nullptr, &out.p3());
         return out;
     }
 
@@ -202,7 +241,8 @@ struct rotor final : public entity<0b10>
     void KLN_VEC_CALL operator()(direction* in, direction* out, size_t count) const
         noexcept
     {
-        sw312<true, false>(&in->p3(), parts[0].reg, nullptr, &out->p3(), count);
+        detail::sw312<true, false>(
+            &in->p3(), parts[0].reg, nullptr, &out->p3(), count);
     }
 };
 } // namespace kln

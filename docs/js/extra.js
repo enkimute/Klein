@@ -3,6 +3,8 @@
 
     var macros = {
         '\\ee': '\\mathbf{e}',
+        '\\JJ': '\\mathbf{J}',
+        '\\PGA': '\\mathbf{P}(\\mathbb{R}^*_{3, 0, 1})',
     };
 
     var katexMath = (function () {
@@ -36,7 +38,12 @@
             if (typeof katex !== "undefined") {
                 katexMath();
             }
+
+            if (typeof mermaid !== 'undefined') {
+                mermaid.initialize({
+                    theme: 'neutral'
+                });
+            }
         });
     })();
-
 }());

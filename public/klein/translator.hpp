@@ -2,6 +2,7 @@
 
 #include "detail/matrix.hpp"
 #include "entity.hpp"
+#include "line.hpp"
 #include "mat4x4.hpp"
 #include "plane.hpp"
 #include "point.hpp"
@@ -60,6 +61,10 @@ struct translator final : public entity<0b110>
             parts[1].reg, _mm_set_ps(inv_norm, inv_norm, inv_norm, 0.f));
     }
 
+    translator(entity<0b110> const& other)
+        : entity{other}
+    {}
+
     /// Fast load operation for packed data that is already normalized. The
     /// argument `data` should point to a set of 4 float values with layout
     /// `(0.f, a, b, c)` corresponding to the multivector $a\mathbf{e}_{01} +
@@ -67,12 +72,30 @@ struct translator final : public entity<0b110>
     ///
     /// !!! danger
     ///
-    ///     The rotor data loaded this way *must* be normalized. That is, the
-    ///     quantity $a^2 + b^2 + c^2$ must be 1.
+    ///     The translator data loaded this way *must* be normalized. That is,
+    ///     the quantity $-\sqrt{a^2 + b^2 + c^2}$ must be half the desired
+    ///     displacement.
     void load_normalized(float* data) noexcept
     {
         parts[0].reg = _mm_set_ss(1.f);
         parts[1].reg = _mm_loadu_ps(data);
+    }
+
+    /// Compute the logarithm of the translator, producing an ideal line axis.
+    /// In practice, the logarithm of a translator is simply the ideal partition
+    /// (without the scalar $1$).
+    ideal_line log() const noexcept
+    {
+        ideal_line out;
+        out.p2() = p2();
+        return out;
+    }
+
+    /// Retrieve the ideal line axis of this translator which can be directly
+    /// manipulated to augment or diminish the weight of this translator.
+    ideal_line& log() noexcept
+    {
+        return reinterpret_cast<ideal_line&>(p2());
     }
 
     /// Conjugates a plane $p$ with this translator and returns the result
@@ -80,7 +103,21 @@ struct translator final : public entity<0b110>
     plane KLN_VEC_CALL operator()(plane const& p) const noexcept
     {
         plane out;
-        out.p0() = sw02(p.p0(), _mm_blend_ps(parts[1].reg, parts[0].reg, 1));
+#ifdef KLEIN_SSE_4_1
+        __m128 tmp = _mm_blend_ps(parts[1].reg, _mm_set_ss(1.f), 1);
+#else
+        __m128 tmp = _mm_add_ps(parts[1].reg, _mm_set_ss(1.f));
+#endif
+        out.p0() = detail::sw02(p.p0(), tmp);
+        return out;
+    }
+
+    /// Conjugates a line $\ell$ with this translator and returns the result
+    /// $t\ell\widetilde{t}$.
+    line KLN_VEC_CALL operator()(line const& l) const noexcept
+    {
+        line out;
+        detail::swL2(l.p1(), l.p2(), p2(), &out.p1());
         return out;
     }
 
@@ -89,7 +126,7 @@ struct translator final : public entity<0b110>
     point KLN_VEC_CALL operator()(point const& p) const noexcept
     {
         point out;
-        out.p3() = sw32(p.p3(), parts[1].reg);
+        out.p3() = detail::sw32(p.p3(), parts[1].reg);
         return out;
     }
 };

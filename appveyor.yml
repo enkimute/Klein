@@ -1,0 +1,33 @@
+branches:
+  only:
+    - master
+
+configuration:
+  - Debug
+
+clone_depth: 1
+
+skip_commits:
+  files:
+    - scripts/*
+    - docs/*
+    - theme/*
+    - bench/*
+    - '*.md'
+
+init:
+  - set PATH=C:\cygwin\bin;%PATH%
+
+image:
+  - Visual Studio 2019
+
+platform:
+  - x64
+
+build_script:
+  - cmake --version
+  - cmake -G "Visual Studio 16 2019" -A x64 -DCMAKE_BUILD_TYPE=%configuration% -DKLEIN_ENABLE_PERF=OFF
+  - cmake --build .
+  - dir
+  - C:\projects\klein\%configuration%\klein_test.exe
+  - C:\projects\klein\%configuration%\klein_test_sse42.exe

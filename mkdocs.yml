@@ -1,4 +1,4 @@
-site_name: Klein
+site_name: klein
 theme:
   name: material
   custom_dir: 'theme'
@@ -10,47 +10,53 @@ theme:
     tabs: false
   logo:
     icon: 'flip'
-site_url: https://jeremyong.com/Klein/
-repo_url: https://github.com/jeremyong/Klein/
+site_url: https://jeremyong.com/klein/
+repo_url: https://github.com/jeremyong/klein/
 edit_uri: ''
-repo_name: 'jeremyong/Klein'
+repo_name: 'jeremyong/klein'
 site_description: Klein - Realtime Projective Geometric Algebra
 site_author: Jeremy Ong
 copyright: 'Klein Copyright &copy; 2020 Jeremy Ong'
 google_analytics: ['UA-10576233-1', 'auto']
 
-plugins: []
+plugins:
+  - search
 
 nav:
   - 'Home': 'index.md'
   - 'Quick Start': 'quickstart.md'
   - 'API':
       - 'Overview': 'overview.md'
-      - 'Entity': 'api/kln::entity.md'
-      - 'Plane': 'api/kln::plane.md'
-      - 'Line': 'api/kln::line.md'
-      - 'Point': 'api/kln::point.md'
-      - 'Rotor': 'api/kln::rotor.md'
-      - 'Translator': 'api/kln::translator.md'
-      - 'Motor': 'api/kln::motor.md'
-      - 'Ideal Line': 'api/kln::ideal_line.md'
-      - 'Direction': 'api/kln::direction.md'
-      - 'Mat4x4': 'api/kln::mat4x4.md'
-      - 'Origin': 'api/kln::origin.md'
+      - 'Entity': 'api/kln_entity.md'
+      - 'Plane': 'api/kln_plane.md'
+      - 'Line': 'api/kln_line.md'
+      - 'Point': 'api/kln_point.md'
+      - 'Rotor': 'api/kln_rotor.md'
+      - 'Branch': 'api/kln_branch.md'
+      - 'Translator': 'api/kln_translator.md'
+      - 'Motor': 'api/kln_motor.md'
+      - 'Ideal Line': 'api/kln_ideal_line.md'
+      - 'Direction': 'api/kln_direction.md'
+      - 'Mat3x4': 'api/kln_mat3x4.md'
+      - 'Mat4x4': 'api/kln_mat4x4.md'
+      - 'Origin': 'api/kln_origin.md'
+  - 'Geometry Potpourri': 'geometry-potpourri.md'
   - 'Tutorial':
       - 'Introduction': 'tutorial/intro.md'
       - 'Exterior Algebra': 'tutorial/exterior_algebra.md'
+  - 'Case Studies':
+      - 'Basic Skeletal Animation': 'case_studies/ga_skeletal_animation.md'
   - 'Klein Shell': 'shell.md'
-  # - 'Benchmarks': 'benchmarks.md'
-  - 'Roadmap': 'roadmap.md'
+  - 'Performance': 'perf.md'
+  - 'Discord': 'discord.md'
   - 'References': 'references.md'
 
 extra_css:
+  - 'css/extra.css'
   - 'https://cdn.jsdelivr.net/npm/katex@0.11.1/dist/katex.min.css'
 
 extra_javascript:
   - 'js/extra.js'
-  - 'https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js'
   - 'https://cdn.jsdelivr.net/npm/katex@0.11.1/dist/katex.min.js'
   - 'https://cdn.jsdelivr.net/npm/ganja.js@1.0.169'
 
@@ -63,6 +69,7 @@ markdown_extensions:
   - footnotes
   - pymdownx.arithmatex:
       generic: True
+  - pymdownx.details
   - pymdownx.superfences
   - pymdownx.mark
   - pymdownx.extrarawhtml

@@ -28,12 +28,12 @@ struct plane final : public entity<0b1>
 
     /// Data should point to four floats with memory layout `(d, a, b, c)` where
     /// `d` occupies the lowest address in memory.
-    plane(float* data) noexcept
+    explicit plane(float* data) noexcept
     {
         parts[0].reg = _mm_loadu_ps(data);
     }
 
-    /// Line to plane cast.
+    /// Point/plane to plane cast.
     ///
     /// !!! danger
     ///
@@ -65,25 +65,60 @@ struct plane final : public entity<0b1>
         parts[0].reg = _mm_loadu_ps(data);
     }
 
+    /// Normalize this plane $p$ such that $p \cdot p = 1$.
+    ///
+    /// In order to compute the cosine of the angle between planes via the
+    /// inner product operator `|`, the planes must be normalized. Producing a
+    /// normalized rotor between two planes with the geometric product `*` also
+    /// requires that the planes are normalized.
+    ///
+    /// !!! tip
+    ///
+    ///     Normalization here is done using the `rsqrtps`
+    ///     instruction with a maximum relative error of $1.5\times 2^{-12}$.
+    void normalize() noexcept
+    {
+        __m128 inv_norm = _mm_rsqrt_ps(detail::hi_dp_bc(p0(), p0()));
+#ifdef KLEIN_SSE_4_1
+        inv_norm = _mm_blend_ps(inv_norm, _mm_set_ss(1.f), 1);
+#else
+        inv_norm = _mm_add_ps(inv_norm, _mm_set_ss(1.f));
+#endif
+        p0() = _mm_mul_ps(inv_norm, p0());
+    }
+
+    /// Compute the plane norm, which is often used to compute distances
+    /// between points and lines.
+    ///
+    /// Given a normalized point $P$ and normalized line $\ell$, the plane
+    /// $P\vee\ell$ containing both $\ell$ and $P$ will have a norm equivalent
+    /// to the distance between $P$ and $\ell$.
+    [[nodiscard]] float norm() const noexcept
+    {
+        float out;
+        _mm_store_ss(&out, _mm_rcp_ss(_mm_rsqrt_ss(detail::hi_dp(p0(), p0()))));
+        return out;
+    }
+
     /// Reflect another plane $p_2$ through this plane $p_1$. The operation
     /// performed via this call operator is an optimized routine equivalent to
     /// the expression $p_1 p_2 p_1$.
-    plane KLN_VEC_CALL operator()(plane const& p) const noexcept
+    [[nodiscard]] plane KLN_VEC_CALL operator()(plane const& p) const noexcept
     {
         plane out;
-        sw00(p0(), p.p0(), out.p0());
+        detail::sw00(p0(), p.p0(), out.p0());
         return out;
     }
 
     /// Reflect line $\ell$ through this plane $p$. The operation
     /// performed via this call operator is an optimized routine equivalent to
     /// the expression $p \ell p$.
-    line KLN_VEC_CALL operator()(line const& l) const noexcept
+    [[nodiscard]] line KLN_VEC_CALL operator()(line const& l) const noexcept
     {
         line out;
-        sw10(p0(), l.p1(), out.p1(), out.p2());
+        detail::sw10(p0(), l.p1(), out.p1(), out.p2());
         __m128 p2_tmp;
-        sw20(p0(), l.p2(), p2_tmp);
+        detail::sw20(p0(), l.p2(), p2_tmp);
         out.p2() = _mm_add_ps(out.p2(), p2_tmp);
         return out;
     }
@@ -91,49 +126,49 @@ struct plane final : public entity<0b1>
     /// Reflect the point $P$ through this plane $p$. The operation
     /// performed via this call operator is an optimized routine equivalent to
     /// the expression $p P p$.
-    point KLN_VEC_CALL operator()(point const& p) const noexcept
+    [[nodiscard]] point KLN_VEC_CALL operator()(point const& p) const noexcept
     {
         point out;
-        sw30(p0(), p.p3(), out.p3());
+        detail::sw30(p0(), p.p3(), out.p3());
         return out;
     }
 
-    float x() const noexcept
+    [[nodiscard]] float x() const noexcept
     {
         return parts[0].data[1];
     }
 
-    float& x() noexcept
+    [[nodiscard]] float& x() noexcept
     {
         return parts[0].data[1];
     }
 
-    float y() const noexcept
+    [[nodiscard]] float y() const noexcept
     {
         return parts[0].data[2];
     }
 
-    float& y() noexcept
+    [[nodiscard]] float& y() noexcept
     {
         return parts[0].data[2];
     }
 
-    float z() const noexcept
+    [[nodiscard]] float z() const noexcept
     {
         return parts[0].data[3];
     }
 
-    float& z() noexcept
+    [[nodiscard]] float& z() noexcept
     {
         return parts[0].data[3];
     }
 
-    float d() const noexcept
+    [[nodiscard]] float d() const noexcept
     {
         return parts[0].data[0];
     }
 
-    float& d() noexcept
+    [[nodiscard]] float& d() noexcept
     {
         return parts[0].data[0];
     }

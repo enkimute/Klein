@@ -33,7 +33,8 @@ TEST_CASE("reflect-plane")
 TEST_CASE("reflect-line")
 {
     plane p{3.f, 2.f, 1.f, -1.f};
-    line l1{1.f, -2.f, 3.f, -4.f, 5.f, 6.f};
+    // a*e01 + b*e01 + c*e02 + d*e23 + e*e31 + f*e12
+    line l1{1.f, -2.f, 3.f, 6.f, 5.f, -4.f};
     line l2 = p(l1);
     CHECK_EQ(l2.e01(), 28.f);
     CHECK_EQ(l2.e02(), -72.f);
@@ -57,10 +58,11 @@ TEST_CASE("reflect-point")
 TEST_CASE("rotor-line")
 {
     // Make an unnormalized rotor to verify correctness
-    float data[4] = {1.f, 2.f, -3.f, 4.f};
+    float data[4] = {1.f, 4.f, -3.f, 2.f};
     rotor r;
     r.load_normalized(data);
-    line l1{-1.f, 2.f, -3.f, 4.f, 5.f, -6.f};
+    // a*e01 + b*e01 + c*e02 + d*e23 + e*e31 + f*e12
+    line l1{-1.f, 2.f, -3.f, -6.f, 5.f, 4.f};
     line l2{r(l1)};
     CHECK_EQ(l2.e01(), -110.f);
     CHECK_EQ(l2.e02(), 20.f);
@@ -90,6 +92,22 @@ TEST_CASE("translator-point")
     CHECK_EQ(p2.z(), 1.f);
 }
 
+TEST_CASE("translator-line")
+{
+    float data[4] = {0.f, -5.f, -2.f, 2.f};
+    translator t;
+    t.load_normalized(data);
+    // a*e01 + b*e01 + c*e02 + d*e23 + e*e31 + f*e12
+    line l1{-1.f, 2.f, -3.f, -6.f, 5.f, 4.f};
+    line l2{t(l1)};
+    CHECK_EQ(l2.e01(), 35.f);
+    CHECK_EQ(l2.e02(), -14.f);
+    CHECK_EQ(l2.e03(), 71.f);
+    CHECK_EQ(l2.e12(), 4.f);
+    CHECK_EQ(l2.e31(), 5.f);
+    CHECK_EQ(l2.e23(), -6.f);
+}
+
 TEST_CASE("construct-motor")
 {
     rotor r{M_PI * 0.5f, 0, 0, 1.f};
@@ -104,7 +122,7 @@ TEST_CASE("construct-motor")
 
 TEST_CASE("motor-plane")
 {
-    motor m{1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f};
+    motor m{1.f, 4.f, 3.f, 2.f, 5.f, 6.f, 7.f, 8.f};
     plane p1{3.f, 2.f, 1.f, -1.f};
     plane p2 = m(p1);
     CHECK_EQ(p2.x(), 78.f);
@@ -115,7 +133,7 @@ TEST_CASE("motor-plane")
 
 TEST_CASE("motor-point")
 {
-    motor m{1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f};
+    motor m{1.f, 4.f, 3.f, 2.f, 5.f, 6.f, 7.f, 8.f};
     point p1{-1.f, 1.f, 2.f};
     point p2 = m(p1);
     CHECK_EQ(p2.x(), -12.f);
@@ -126,8 +144,9 @@ TEST_CASE("motor-point")
 
 TEST_CASE("motor-line")
 {
-    motor m{2.f, -1.f, 3.f, 4.f, -5.f, -2.f, 2.f, -3.f};
-    line l1{-1.f, 2.f, -3.f, 4.f, 5.f, -6.f};
+    motor m{2.f, 4.f, 3.f, -1.f, -5.f, -2.f, 2.f, -3.f};
+    // a*e01 + b*e01 + c*e02 + d*e23 + e*e31 + f*e12
+    line l1{-1.f, 2.f, -3.f, -6.f, 5.f, 4.f};
     line l2{m(l1)};
     CHECK_EQ(l2.e01(), 6.f);
     CHECK_EQ(l2.e02(), 522.f);
@@ -150,9 +169,9 @@ TEST_CASE("motor-origin")
 
 TEST_CASE("motor-to-matrix")
 {
-    motor m{1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f};
+    motor m{1.f, 4.f, 3.f, 2.f, 5.f, 6.f, 7.f, 8.f};
     __m128 p1    = _mm_set_ps(1.f, 2.f, 1.f, -1.f);
-    mat4x4 m_mat = m.as_matrix();
+    mat4x4 m_mat = m.as_mat4x4();
     __m128 p2    = m_mat(p1);
     float buf[4];
     _mm_storeu_ps(buf, p2);
@@ -163,9 +182,25 @@ TEST_CASE("motor-to-matrix")
     CHECK_EQ(buf[3], 30.f);
 }
 
+TEST_CASE("motor-to-matrix-3x4")
+{
+    motor m{1.f, 4.f, 3.f, 2.f, 5.f, 6.f, 7.f, 8.f};
+    m.normalize();
+    __m128 p1    = _mm_set_ps(1.f, 2.f, 1.f, -1.f);
+    mat3x4 m_mat = m.as_mat3x4();
+    __m128 p2    = m_mat(p1);
+    float buf[4];
+    _mm_storeu_ps(buf, p2);
+
+    CHECK_EQ(buf[0], doctest::Approx(-12.f / 30.f).epsilon(0.001f));
+    CHECK_EQ(buf[1], doctest::Approx(-86.f / 30.f).epsilon(0.001f));
+    CHECK_EQ(buf[2], doctest::Approx(-86.f / 30.f).epsilon(0.001f));
+    CHECK_EQ(buf[3], 1.f);
+}
+
 TEST_CASE("normalize-motor")
 {
-    motor m{1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f};
+    motor m{1.f, 4.f, 3.f, 2.f, 5.f, 6.f, 7.f, 8.f};
     m.normalize();
     motor norm = m * ~m;
     CHECK_EQ(norm.scalar(), doctest::Approx(1.f).epsilon(0.001));
