@@ -118,6 +118,31 @@ TEST_CASE("construct-motor")
     CHECK_EQ(p2.x(), 0.f);
     CHECK_EQ(p2.y(), doctest::Approx(1.f));
     CHECK_EQ(p2.z(), doctest::Approx(1.f));
+
+    // Rotation and translation about the same axis commutes
+    m  = t * r;
+    p2 = m(p1);
+    CHECK_EQ(p2.x(), 0.f);
+    CHECK_EQ(p2.y(), doctest::Approx(1.f));
+    CHECK_EQ(p2.z(), doctest::Approx(1.f));
+
+    line l = log(m);
+    CHECK_EQ(l.e23(), 0.f);
+    CHECK_EQ(l.e12(), doctest::Approx(-0.7854).epsilon(0.001));
+    CHECK_EQ(l.e31(), 0.f);
+    CHECK_EQ(l.e01(), 0.f);
+    CHECK_EQ(l.e02(), 0.f);
+    CHECK_EQ(l.e03(), doctest::Approx(-0.5));
+}
+
+TEST_CASE("construct-motor-via-screw-axis")
+{
+    motor m{M_PI * 0.5f, 1.f, line{0.f, 0.f, 0.f, 0.f, 0.f, 1.f}};
+    point p1{1, 0, 0};
+    point p2 = m(p1);
+    CHECK_EQ(p2.x(), doctest::Approx(0.f));
+    CHECK_EQ(p2.y(), doctest::Approx(1.f));
+    CHECK_EQ(p2.z(), doctest::Approx(1.f));
 }
 
 TEST_CASE("motor-plane")
@@ -192,9 +217,9 @@ TEST_CASE("motor-to-matrix-3x4")
     float buf[4];
     _mm_storeu_ps(buf, p2);
 
-    CHECK_EQ(buf[0], doctest::Approx(-12.f / 30.f).epsilon(0.001f));
-    CHECK_EQ(buf[1], doctest::Approx(-86.f / 30.f).epsilon(0.001f));
-    CHECK_EQ(buf[2], doctest::Approx(-86.f / 30.f).epsilon(0.001f));
+    CHECK_EQ(buf[0], doctest::Approx(-12.f / 30.f));
+    CHECK_EQ(buf[1], doctest::Approx(-86.f / 30.f));
+    CHECK_EQ(buf[2], doctest::Approx(-86.f / 30.f));
     CHECK_EQ(buf[3], 1.f);
 }
 
@@ -203,17 +228,45 @@ TEST_CASE("normalize-motor")
     motor m{1.f, 4.f, 3.f, 2.f, 5.f, 6.f, 7.f, 8.f};
     m.normalize();
     motor norm = m * ~m;
-    CHECK_EQ(norm.scalar(), doctest::Approx(1.f).epsilon(0.001));
-    CHECK_EQ(norm.e0123(), doctest::Approx(0.f).epsilon(0.001));
+    CHECK_EQ(norm.scalar(), doctest::Approx(1.f));
+    CHECK_EQ(norm.e0123(), doctest::Approx(0.f));
+}
+
+TEST_CASE("motor-sqrt")
+{
+    motor m{M_PI * 0.5f, 3.f, line{3.f, 1.f, 2.f, 4.f, -2.f, 1.f}.normalized()};
+
+    motor m2 = sqrt(m);
+    m2       = m2 * m2;
+    CHECK_EQ(m.scalar(), doctest::Approx(m2.scalar()));
+    CHECK_EQ(m.e01(), doctest::Approx(m2.e01()));
+    CHECK_EQ(m.e02(), doctest::Approx(m2.e02()));
+    CHECK_EQ(m.e03(), doctest::Approx(m2.e03()));
+    CHECK_EQ(m.e23(), doctest::Approx(m2.e23()));
+    CHECK_EQ(m.e31(), doctest::Approx(m2.e31()));
+    CHECK_EQ(m.e12(), doctest::Approx(m2.e12()));
+    CHECK_EQ(m.e0123(), doctest::Approx(m2.e0123()));
+}
+
+TEST_CASE("rotor-sqrt")
+{
+    rotor r{M_PI * 0.5f, 1, 2, 3};
+
+    rotor r2 = sqrt(r);
+    r2       = r2 * r2;
+    CHECK_EQ(r2.scalar(), doctest::Approx(r.scalar()));
+    CHECK_EQ(r2.e23(), doctest::Approx(r.e23()));
+    CHECK_EQ(r2.e31(), doctest::Approx(r.e31()));
+    CHECK_EQ(r2.e12(), doctest::Approx(r.e12()));
 }
 
 TEST_CASE("normalize-rotor")
 {
     rotor r;
-    r.p1() = _mm_set_ps(4.f, -3.f, 3.f, 28.f);
+    r.p1_ = _mm_set_ps(4.f, -3.f, 3.f, 28.f);
     r.normalize();
     rotor norm = r * ~r;
-    CHECK_EQ(norm.scalar(), doctest::Approx(1.f).epsilon(0.001));
+    CHECK_EQ(norm.scalar(), doctest::Approx(1.f));
     CHECK_EQ(norm.e12(), doctest::Approx(0.f));
     CHECK_EQ(norm.e31(), doctest::Approx(0.f));
     CHECK_EQ(norm.e23(), doctest::Approx(0.f));
